@@ -1,0 +1,219 @@
+---
+title: "NYPD Shooting Incident Data"
+#author: "T. D."
+date: "2023-10-10"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Purpose of Analysis
+
+The purpose of this analysis is to determine if certain months of the year have more shooting incidents, and if this differs between the sexes.
+
+## Summary of Data and Source
+
+This data comes from data.cityofnewyork.us and is maintained by NYC OpenData.
+
+Per their website, this data is a compilation of "of every shooting incident that occurred in NYC going back to 2006 through the end of the previous calendar year. This data is manually extracted every quarter and reviewed by the Office of Management Analysis and Planning before being posted on the NYPD website. Each record represents a shooting incident in NYC and includes information about the event, the location and time of occurrence. In addition, information related to suspect and victim demographics is also included."
+
+## 1a. Install Tidyverse Package
+
+```{r tidyverse, warning=FALSE}
+
+## install.packages("tidyverse", repos = "http://cran.us.r-project.org")
+library("tidyverse")
+
+```
+
+## 1b. Import Data
+
+  This will import and load the necessary data from the source.
+
+```{r import_data}
+
+## Get current data from data.gov website
+url <- "https://data.cityofnewyork.us/api/views/833y-fsy8/rows.csv?accessType=DOWNLOAD"
+
+NYPD_df <- read_csv(url)
+NYPD_df
+
+```
+
+## 2. Tidy and Transform Data
+
+  Here, we remove unused columns to clean up the data frame for this analysis. We also check for missing values.
+  
+
+```{r tidy data}
+
+
+
+NYPD_df_2 <- NYPD_df %>% select(INCIDENT_KEY,
+                                OCCUR_DATE,
+                                OCCUR_TIME,
+                                BORO,
+                                PERP_SEX,
+                                VIC_SEX)
+
+lapply(NYPD_df_2, function(x) sum(is.na(x)))
+
+NYPD_df_2
+
+```
+
+There are several thousand blank values in the **PERP_SEX** column. We will replace the missing values with "X". This will allow us to distinguish between the "U" values included in the data.
+
+We also convert a few columns to the correct data type. We will also convert the following columns:
+ 
+  * **INCIDENT_KEY:** dbl to chr
+  * **OCCUR_DATE:** chr to date
+  * **BORO:** chr to factor
+  * **PERP_SEX:** chr to factor
+  * **VIC_SEX:** chr to factor
+
+```{r tidy data continued}
+
+NYPD_df_3 <- NYPD_df_2 %>%
+  
+  replace_na(list(PERP_SEX = "X"))
+  
+NYPD_df_3['PERP_SEX'][NYPD_df_3['PERP_SEX'] =="(null)"] <- "X"
+
+NYPD_df_3$INCIDENT_KEY <- as.character(NYPD_df_3$INCIDENT_KEY)
+NYPD_df_3$OCCUR_DATE <- mdy(NYPD_df_3$OCCUR_DATE)
+NYPD_df_3$BORO <- as.factor(NYPD_df_3$BORO)
+NYPD_df_3$PERP_SEX <- as.factor(NYPD_df_3$PERP_SEX)
+NYPD_df_3$VIC_SEX <- as.factor(NYPD_df_3$VIC_SEX)
+
+NYPD_df_3
+
+summary(NYPD_df_3)
+
+```
+
+## 3. Add Visualizations and Anlaysis
+
+Here we will analyze the data to determine if certain months of the year have more shooting incidents, and if this differs between the sexes and the boroughs.
+
+``` {r analysis_1}
+
+NYPD_df_3$MONTH <- (month(NYPD_df_3$OCCUR_DATE, label = TRUE))
+
+
+NYPD_df_4 <- NYPD_df_3 %>%
+ 
+  group_by(MONTH) 
+
+ NYPD_df_4
+
+
+graph_month <- ggplot(NYPD_df_4, aes(x = MONTH)) + 
+  geom_bar() +
+  labs(title = "Shootings By Month",
+         x = "Month",
+         y = "Num. of Shootings") 
+
+
+graph_month
+
+
+```
+
+This shows that the highest months for shootings is **July, August and June**, in that order. The lowest months are **February, March and January**, in that order. 
+
+
+``` {r analysis_2}
+
+NYPD_df_5 <- NYPD_df_3 %>%
+  group_by(MONTH, PERP_SEX) %>%
+ 
+  count()
+
+NYPD_df_5
+
+graph_2 <- ggplot(NYPD_df_5, aes(fill = PERP_SEX, y = n, x = MONTH)) + 
+  geom_bar(position='dodge', stat='identity') +
+  labs(title = "Shootings By Month Broken Down By Perp_Sex",
+         x = "Month",
+         y = "Num. of Shootings") 
+
+graph_2
+
+
+```
+
+When breaking down the shooting by the sex of the perpetrator, it appears that the results are consistent with the overall shootings, in that the summer months have the highest shootings and the winter has the lowest shootings. This brings up additional questions for further research:
+
+  * 1. Could this mean that temperature may have something to do with an increase in shootings?
+  * 2. Also, what months have the highest tourists? Could more vulnerable groups like tourists lead to increased shootings?
+  * 3. If tourist populations and temperatures coincide with the increase in shootings, what is the relationship between tourists visiting NYC and the weather?
+
+
+### Where are the Most Dangerous Neighborhoods in NYC?
+
+Now let's look at the incidents in each borough throughout the year.
+
+``` {r analysis_3}
+
+NYPD_df_6 <- NYPD_df_3 %>%
+  group_by(MONTH, BORO) %>%
+ 
+  count()
+
+NYPD_df_6
+
+graph_3 <- ggplot(NYPD_df_6, aes(fill = BORO, y = n, x = MONTH)) + 
+  geom_bar(position='dodge', stat='identity') +
+  labs(title = "Shootings By Month Broken Down By Boro",
+         x = "Month",
+         y = "Num. of Shootings") 
+
+graph_3
+
+
+```
+
+When analyzing the data by borough, the trends are consistent among each other (and with the previous visualizations). All boroughs experience an increase in shootings in the summer and less shootings in the winter. **Brooklyn and the Bronx experience the highest** amount of shootings while **Staten Island and Manhattan see the fewest**. Some additional research questions:
+
+  * 1. Does population of the boroughs play a role in the amount of shootings? I.e., researchers should look at the shootings per capita as well as the total shooting incidents.
+  * 2. Why do some boroughs have fewer or greater shootings? What socio-economic factors contribute to this?
+  
+These important questions cannot be answered with the current data set, but would be interesting to dive into and analyze the results!
+
+
+### What is the most dangerous time of year for each sex in NYC?
+
+To answer this, we need to look at the number of incidents for each victim sex over all months. Below is the graph of incidents for each victim's sex throughout the year.
+
+``` {r analysis_4_model}
+
+NYPD_df_7 <- NYPD_df_3 %>% 
+  
+  mutate(INCIDENT_KEY = as.numeric(INCIDENT_KEY)) %>%
+  group_by(MONTH, VIC_SEX) %>%
+  summarize(Incident_Count = n())
+  
+
+NYPD_df_7
+
+
+vic_model <- ggplot(NYPD_df_7, aes(x = MONTH, y = Incident_Count, color = VIC_SEX)) +
+  geom_line(aes(group = VIC_SEX)) +
+  labs(title = "What is the Most Dangerous Time of Year for Each Sex?", x = "Month", y = "Incident Count") + theme_minimal()
+  
+
+vic_model
+
+
+```
+
+For both Females and Males, the most dangerous time of year is in July, while the safest time of year is in February.  Perhaps consider taking the beach vacation this summer instead of trip to the Big Apple, and hold that trip off until the winter!
+
+## 4. Bias Indentification
+
+  It is important to check your bias before performing analysis like this, particularly when it comes to sensitive data that involves crimes like this one does. It can be easy for us to tweak our data to fit a narrative that we believe based on personal experiences. I personally have never been to NYC before, so I did not have any pre-conceived notions about where is safe or dangerous. I'm just unfamiliar with the boroughs of NYC. I did however, think that there might be a higher rate of incidents in Nov/Dec time as I figured there would be higher crime around the holidays. Perhaps watching movies like "Home Alone" have played a role into my bias here, but I was glad to see this was not the case. I tried to keep in mind that this was data I was unfamiliar with and therefore could not draw conclusions before analyzing.
+  
+  Other sources of bias in a data set like this could be that people of a specific race or sex are more likely to commit violence, or are more likely to be a victim. Before analyzing data with factors like this, you must check your bias at the front door to avoid drawing conclusions. Some questions I posed earlier include looking at a more comprehensive view of the incidents, such as if victims were tourists and if weather or socio-economic status plays a role.
